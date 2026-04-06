@@ -1,0 +1,41 @@
+{
+  "name": "@icjia/viewcap",
+  "version": "0.1.0",
+  "description": "MCP screenshot server for Claude Code — Vision-optimized page capture with automatic tiling",
+  "type": "module",
+  "main": "src/server.js",
+  "bin": {
+    "viewcap": "./src/server.js"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js --allow-js",
+    "test": "node --test test/*.test.js"
+  },
+  "files": [
+    "src/",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "screenshot",
+    "puppeteer",
+    "claude",
+    "vision"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ICJIA/viewcap-mcp.git"
+  },
+  "dependencies": {
+    "@cfworker/json-schema": "^4.1.1",
+    "@modelcontextprotocol/server": "^2.0.0-alpha.2",
+    "puppeteer": "^24.40.0",
+    "sharp": "^0.34.5",
+    "zod": "^4.3.6"
+  }
+}
