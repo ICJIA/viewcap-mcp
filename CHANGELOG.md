@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.1.1 — 2026-04-06
+
+### Security audit fixes
+
+Red/blue team adversarial audit identified and resolved the following:
+
+**Critical**
+- Zod schemas for `waitFor` and `selectorTimeout` described a max value but didn't enforce it — a caller could hang the browser indefinitely. Added `.max(30000)` and `.max(15000)` respectively.
+- CLI accepted arbitrary numeric inputs (width, height, duration, interval) with no bounds checking, allowing OOM via huge viewport dimensions. Added `clampInt`/`clampFloat` validation with CONFIG-based limits.
+
+**High**
+- SSRF: Only `169.254.x.x` was blocked. Added full RFC1918 private ranges (`10.x`, `172.16-31.x`, `192.168.x`) and IPv6 link-local (`fe80:`) to BLOCKED_IP_PREFIXES — prevents reaching internal network services.
+- DNS resolution failure in `isBlockedIp` returned `false` (allow). Changed to fail closed — unresolvable hostnames are now blocked by default.
+- `validateOutputDir` had a TOCTOU symlink race: mkdir ran before realpath. Now resolves the deepest existing ancestor's real path before creating any directories.
+- Screencast module had its own request queue separate from capture.js — concurrent screenshot + screencast calls could collide on the browser. Unified to a single shared queue.
+
+**Medium**
+- External URL logging included full URL with query parameters, risking token leakage. Now logs hostname only.
+
+### What passed audit (no changes needed)
+- JavaScript injection gate: properly isolated, no bypass vectors
+- Error message sanitization: generic messages to Claude, details to stderr only
+- Post-navigation URL recheck: catches redirects to blocked schemes
+- Tile/frame caps: hard limits enforced
+- Page cleanup: try/finally ensures pages close on errors
+
+---
+
 ## 0.1.0 — 2026-04-06
 
 ### Phase 1: Core screenshot + security

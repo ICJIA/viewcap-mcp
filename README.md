@@ -349,11 +349,15 @@ Six dependencies: `@modelcontextprotocol/server`, `zod`, `puppeteer`, `sharp`, `
 
 ViewCap runs locally over stdio — no network listener, no ports, no remote attack surface. Security mitigations focus on preventing misuse through prompt injection.
 
+An adversarial red/blue team audit was conducted after the initial release. All critical and high findings were fixed in v0.1.1. See [CHANGELOG.md](CHANGELOG.md) for the full list.
+
 ### SSRF prevention
 
 - **Scheme whitelist:** Only `http:` and `https:` URLs are allowed. `file://`, `data:`, `javascript:`, and all other schemes are blocked.
 - **Metadata endpoint blocklist:** AWS (`169.254.169.254`), GCP (`metadata.google.internal`), and Azure (`metadata.azure.com`) metadata endpoints are blocked.
-- **IP resolution:** Hostnames are resolved and checked against blocked IP ranges, catching hex IPs, octal IPs, IPv6-mapped addresses, and DNS wildcard services.
+- **Private IP range blocklist:** All RFC1918 private ranges (`10.x`, `172.16-31.x`, `192.168.x`), IPv4 link-local (`169.254.x`), and IPv6 link-local/unique-local (`fe80:`, `fd00:`) are blocked. This prevents reaching internal network services via alternate IP encodings.
+- **IP resolution:** Hostnames are resolved to IP addresses and checked against blocked ranges, catching hex IPs, octal IPs, IPv6-mapped addresses, and DNS wildcard services.
+- **Fail-closed DNS:** If hostname resolution fails, the request is blocked (not allowed). This prevents DNS poisoning or resolution failures from bypassing IP checks.
 - **Post-navigation recheck:** After page load, the final URL is re-validated to catch HTTP redirects and DNS rebinding attacks.
 
 ### JavaScript injection
@@ -364,24 +368,41 @@ ViewCap runs locally over stdio — no network listener, no ports, no remote att
 ### Directory traversal prevention
 
 - Output paths are validated against the user's home directory and `/tmp` only.
-- Symlinks are resolved via `realpathSync` after directory creation to catch symlink escape attacks.
+- The deepest existing ancestor directory is resolved via `realpathSync` **before** any new directories are created, preventing TOCTOU symlink swap attacks.
+- After creation, the final path is re-verified against allowed roots (belt and suspenders).
 
 ### Error message safety
 
 - Error messages returned to the AI are generic (e.g., "Blocked URL scheme") and never include internal paths, IPs, or stack traces.
+- External URL logging writes hostname only (not full URL) to stderr, preventing token leakage from query parameters.
+
+### Input validation
+
+- **MCP path:** All parameters validated by Zod schemas with enforced min/max bounds. `waitFor` capped at 30s, `selectorTimeout` at 15s, viewport dimensions at 1072px.
+- **CLI path:** All numeric inputs validated with bounds checking (`clampInt`/`clampFloat`), preventing OOM from oversized dimensions or indefinite hangs from uncapped timeouts.
+- **Request serialization:** A single shared async queue serializes all capture operations (screenshots, selectors, and screencasts) to prevent concurrent Puppeteer page collisions.
 
 ### Resource limits
 
-| Resource | Limit |
-|----------|-------|
-| Screenshot tiles | 8 max |
-| Screencast frames | 20 max |
-| Screencast duration | 60s max |
-| Page navigation timeout | 30s |
-| `waitFor` delay | 30s max |
-| Selector wait timeout | 15s max |
-| Selector string length | 1000 chars max |
-| Browser idle shutdown | 60s |
+| Resource | Limit | Enforced By |
+|----------|-------|-------------|
+| Screenshot tiles | 8 max | capture.js |
+| Screencast frames | 20 max | screencast.js |
+| Screencast duration | 60s max | Zod schema + screencast.js |
+| Page navigation timeout | 30s | browser.js |
+| `waitFor` delay | 30s max | Zod schema + capture.js |
+| Selector wait timeout | 15s max | Zod schema + capture.js |
+| Selector string length | 1000 chars max | capture.js |
+| Viewport dimensions | 1072px max | Zod schema + CLI clamp |
+| Browser idle shutdown | 60s | browser.js |
+
+### Known limitations
+
+These were identified in the security audit and are accepted trade-offs:
+
+- **DNS rebinding (partial mitigation):** Post-navigation URL recheck catches most rebinding attacks, but a sufficiently fast rebind between `page.goto()` start and `page.url()` check could theoretically succeed. Full mitigation would require Puppeteer-level DNS pinning, which is not available.
+- **`--allow-js` exfiltration:** When JS injection is enabled, injected scripts can make arbitrary network requests from the page context. Chromium does not enforce CORS in `page.evaluate()`. This is an accepted trade-off of the `--allow-js` flag.
+- **MCP SDK alpha:** The `@modelcontextprotocol/server` package is currently at v2.0.0-alpha. Will track for stable release.
 
 ## Configuration flags
 
