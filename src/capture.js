@@ -35,7 +35,10 @@ async function isBlockedIp(hostname) {
     const { address } = await lookup(hostname);
     return CONFIG.BLOCKED_IP_PREFIXES.some(prefix => address.startsWith(prefix));
   } catch {
-    return false;
+    // DNS resolution failed — fail closed (block the request).
+    // Let Puppeteer surface a navigation error instead of allowing
+    // a potentially dangerous hostname through.
+    return true;
   }
 }
 
@@ -55,7 +58,7 @@ async function validateUrl(url) {
   }
 
   if (!CONFIG.LOCALHOST_HOSTS.includes(parsed.hostname)) {
-    console.error(`[viewcap] Navigating to external URL: ${url}`);
+    console.error(`[viewcap] Navigating to external host: ${parsed.hostname}`);
   }
 
   return parsed.href;
@@ -66,16 +69,30 @@ async function validateUrl(url) {
 function validateOutputDir(dir) {
   const resolved = path.resolve(dir);
   const home = os.homedir();
+  const realHome = fs.realpathSync(home);
+  const realTmp = fs.realpathSync('/tmp');
 
+  // Logical path check (fast reject for obvious violations)
   if (!resolved.startsWith(home) && !resolved.startsWith('/tmp') && !resolved.startsWith('/private/tmp')) {
     throw new Error('Output directory is outside allowed paths');
   }
 
+  // Walk up to the deepest existing ancestor and resolve its real path.
+  // This catches symlink escapes BEFORE we create any directories.
+  let existing = resolved;
+  while (!fs.existsSync(existing)) {
+    existing = path.dirname(existing);
+  }
+  const realExisting = fs.realpathSync(existing);
+  if (!realExisting.startsWith(realHome) && !realExisting.startsWith(realTmp)) {
+    throw new Error('Output directory is outside allowed paths');
+  }
+
+  // Now safe to create — the ancestor is verified
   fs.mkdirSync(resolved, { recursive: true });
   const real = fs.realpathSync(resolved);
 
-  const realHome = fs.realpathSync(home);
-  const realTmp = fs.realpathSync('/tmp');
+  // Final check on the created path (belt and suspenders)
   if (!real.startsWith(realHome) && !real.startsWith(realTmp)) {
     throw new Error('Output directory is outside allowed paths');
   }
@@ -262,6 +279,9 @@ async function _captureSelector({ url, selector, width, height, waitUntil, waitF
 }
 
 // ─── Test-only exports ─────────────────────────────────────────────
+
+// Shared queue — also used by screencast.js to prevent concurrent page ops
+export { enqueue };
 
 export const _test = {
   validateUrl,

@@ -17,8 +17,8 @@ describe('isBlockedIp', () => {
     assert.equal(await isBlockedIp('::1'), false);
   });
 
-  it('returns false for unresolvable hostnames (lets Puppeteer handle)', async () => {
-    assert.equal(await isBlockedIp('this-will-never-resolve-viewcap-test.invalid'), false);
+  it('blocks unresolvable hostnames (fail closed)', async () => {
+    assert.equal(await isBlockedIp('this-will-never-resolve-viewcap-test.invalid'), true);
   });
 
   it('does not block normal external hostnames', async () => {

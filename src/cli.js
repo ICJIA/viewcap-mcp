@@ -19,10 +19,24 @@ program
   .option('--verbose', 'Verbose logging')
   .option('--quiet', 'Errors only');
 
+import { CONFIG } from './config.js';
+
 function applyGlobalOptions(opts) {
   if (opts.allowJs) setAllowJs(true);
   if (opts.verbose) setVerbosity('verbose');
   if (opts.quiet) setVerbosity('quiet');
+}
+
+function clampInt(val, min, max, fallback) {
+  const n = parseInt(val);
+  if (isNaN(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function clampFloat(val, min, max, fallback) {
+  const n = parseFloat(val);
+  if (isNaN(n) || !isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
 }
 
 program
@@ -41,11 +55,11 @@ program
     try {
       const params = {
         url,
-        width: parseInt(opts.width),
-        height: parseInt(opts.height),
+        width: clampInt(opts.width, 1, CONFIG.MAX_DIMENSION, CONFIG.MAX_DIMENSION),
+        height: clampInt(opts.height, 1, CONFIG.MAX_DIMENSION, CONFIG.MAX_DIMENSION),
         fullPage: opts.fullPage,
         waitUntil: opts.waitUntil,
-        waitFor: parseInt(opts.waitFor),
+        waitFor: clampInt(opts.waitFor, 0, CONFIG.WAIT_FOR_MAX, 0),
       };
 
       if (opts.js) params.javascript = opts.js;
@@ -98,11 +112,11 @@ program
       const params = {
         url,
         selector,
-        width: parseInt(opts.width),
-        height: parseInt(opts.height),
+        width: clampInt(opts.width, 1, CONFIG.MAX_DIMENSION, CONFIG.MAX_DIMENSION),
+        height: clampInt(opts.height, 1, CONFIG.MAX_DIMENSION, CONFIG.MAX_DIMENSION),
         waitUntil: opts.waitUntil,
-        waitFor: parseInt(opts.waitFor),
-        selectorTimeout: parseInt(opts.selectorTimeout),
+        waitFor: clampInt(opts.waitFor, 0, CONFIG.WAIT_FOR_MAX, 0),
+        selectorTimeout: clampInt(opts.selectorTimeout, 0, CONFIG.SELECTOR_TIMEOUT_MAX, CONFIG.SELECTOR_TIMEOUT_DEFAULT),
       };
 
       if (opts.directory) params.directory = opts.directory;
@@ -144,10 +158,10 @@ program
     try {
       const params = {
         url,
-        duration: parseFloat(opts.duration),
-        interval: parseFloat(opts.interval),
+        duration: clampFloat(opts.duration, 1, CONFIG.MAX_SCREENCAST_DURATION, 10),
+        interval: clampFloat(opts.interval, 0.5, 30, 2),
         waitUntil: opts.waitUntil,
-        waitFor: parseInt(opts.waitFor),
+        waitFor: clampInt(opts.waitFor, 0, CONFIG.WAIT_FOR_MAX, 0),
         directory: opts.directory,
       };
 

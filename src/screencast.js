@@ -5,18 +5,9 @@ import { createHash } from 'crypto';
 import { CONFIG, log } from './config.js';
 import { getPage, closePage } from './browser.js';
 
-// Import validation helpers from capture.js
-import { _test } from './capture.js';
+// Import validation helpers and shared queue from capture.js
+import { _test, enqueue } from './capture.js';
 const { validateUrl, validateOutputDir, handleJsInjection } = _test;
-
-// Reuse the same queue from capture.js to avoid concurrent page ops
-// Screencast holds the page open for the full duration, so it must serialize
-let queue = Promise.resolve();
-
-function enqueue(fn) {
-  queue = queue.then(() => fn(), () => fn());
-  return queue;
-}
 
 export function takeScreencast(params) {
   return enqueue(() => _takeScreencast(params));
