@@ -15,6 +15,7 @@ const LINUX_ARGS = ['--no-sandbox', '--disable-setuid-sandbox'];
 
 let browser = null;
 let idleTimer = null;
+let intentionalClose = false;
 
 function resetIdleTimer() {
   if (idleTimer) clearTimeout(idleTimer);
@@ -66,8 +67,6 @@ export async function closePage(page) {
     // Page may already be closed if browser crashed
   }
 }
-
-let intentionalClose = false;
 
 export async function shutdown() {
   if (idleTimer) clearTimeout(idleTimer);

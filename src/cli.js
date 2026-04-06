@@ -11,7 +11,7 @@ import { shutdown } from './browser.js';
 program
   .name('viewcap')
   .description('Vision-optimized web page screenshot tool')
-  .version('0.1.0');
+  .version('0.1.1');
 
 // Global options
 program

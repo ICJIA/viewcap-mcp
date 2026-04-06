@@ -7,15 +7,26 @@ import path from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const serverPath = path.join(__dirname, 'server.js');
+const cliPath = path.join(__dirname, 'cli.js');
 
-// Pass through all args except --no-restart
 const args = process.argv.slice(2);
 
-if (args.includes('--no-restart')) {
-  // Run server directly — no wrapper, no restart loop
+// Detect CLI subcommands — these run cli.js directly (no restart wrapper)
+const CLI_COMMANDS = ['capture', 'selector', 'screencast'];
+const firstArg = args[0];
+const isCliMode = firstArg && CLI_COMMANDS.includes(firstArg);
+
+if (isCliMode) {
+  // CLI mode — run cli.js directly, no restart wrapper
+  const proc = spawn('node', [cliPath, ...args], { stdio: 'inherit' });
+  proc.on('exit', (code) => process.exit(code ?? 1));
+  proc.on('error', (err) => {
+    console.error(`[viewcap] Failed to start CLI: ${err.message}`);
+    process.exit(1);
+  });
+} else if (args.includes('--no-restart')) {
+  // MCP server without restart wrapper (for debugging)
   const filteredArgs = args.filter(a => a !== '--no-restart');
-  const { default: child_process } = await import('child_process');
-  // execv-style: replace this process with server.js
   const proc = spawn('node', [serverPath, ...filteredArgs], {
     stdio: 'inherit',
   });
@@ -25,7 +36,7 @@ if (args.includes('--no-restart')) {
     process.exit(1);
   });
 } else {
-  // Restart wrapper with exponential backoff
+  // MCP server with auto-restart and exponential backoff
   const MAX_RESTARTS = 10;
   const WINDOW_MS = 60_000;
   let restartTimes = [];
@@ -36,7 +47,6 @@ if (args.includes('--no-restart')) {
   function startServer() {
     if (shuttingDown) return;
 
-    // Prune restart timestamps outside the window
     const now = Date.now();
     restartTimes = restartTimes.filter(t => now - t < WINDOW_MS);
 
@@ -63,7 +73,7 @@ if (args.includes('--no-restart')) {
       restartTimes.push(Date.now());
 
       setTimeout(() => {
-        backoff = Math.min(backoff * 2, 30_000); // cap at 30s
+        backoff = Math.min(backoff * 2, 30_000);
         startServer();
       }, backoff);
     });
@@ -79,7 +89,6 @@ if (args.includes('--no-restart')) {
     console.error('[viewcap] Shutting down...');
     if (child) {
       child.kill('SIGTERM');
-      // Force kill after 5s
       setTimeout(() => {
         if (child) child.kill('SIGKILL');
         process.exit(0);

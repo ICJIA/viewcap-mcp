@@ -1,7 +1,6 @@
 import sharp from 'sharp';
 import path from 'path';
 import fs from 'fs';
-import { createHash } from 'crypto';
 import { CONFIG, log } from './config.js';
 import { getPage, closePage } from './browser.js';
 
@@ -69,7 +68,6 @@ async function _takeScreencast({ url, duration, interval, waitUntil, waitFor, ja
   const timestamp = Date.now();
 
   for (let i = 0; i < frames.length; i++) {
-    // Resize if needed (should already be 1072x1072 from clip, but safety check)
     const meta = await sharp(frames[i]).metadata();
     let frameBuffer = frames[i];
 
@@ -88,7 +86,6 @@ async function _takeScreencast({ url, duration, interval, waitUntil, waitFor, ja
       content.push({ type: 'image', data: frameBuffer.toString('base64'), mimeType: 'image/png' });
     }
 
-    // Update frame buffer for WebP assembly
     frames[i] = frameBuffer;
   }
 
@@ -96,28 +93,10 @@ async function _takeScreencast({ url, duration, interval, waitUntil, waitFor, ja
   if (outputDir && frames.length > 1) {
     try {
       const webpPath = path.join(outputDir, `screencast-${timestamp}.webp`);
-
-      // Build animated WebP: each frame displayed for 1 second
-      const firstFrame = sharp(frames[0], { animated: true });
-      const compositeFrames = frames.slice(1).map(buf => ({ input: buf }));
-
-      // Use sharp's animation support
-      const animatedBuffer = await sharp(frames[0])
-        .webp({ loop: 0 })
-        .toBuffer();
-
-      // Build frame-by-frame with delay
-      const frameImages = await Promise.all(
-        frames.map(buf => sharp(buf).webp().toBuffer())
-      );
-
-      // Compose animated WebP using sharp's composite with delay
-      // sharp doesn't have a direct "create animated WebP from frames" API,
-      // so we stack frames vertically and use the animation parameters
       const meta = await sharp(frames[0]).metadata();
-      const width = meta.width;
-      const height = meta.height;
+      const { width, height } = meta;
 
+      // Stack frames vertically, then use pageHeight to split into animation frames
       const stacked = await sharp({
         create: {
           width,
@@ -135,14 +114,14 @@ async function _takeScreencast({ url, duration, interval, waitUntil, waitFor, ja
         )
         .webp({
           loop: 0,
-          delay: frames.map(() => 1000), // 1s per frame
+          delay: frames.map(() => 1000),
           pageHeight: height,
         })
         .toBuffer();
 
       fs.writeFileSync(webpPath, stacked);
       content.push({ type: 'text', text: webpPath });
-      log('info', `Screencast: animated WebP saved to ${webpPath}`);
+      log('info', `Screencast: animated WebP saved`);
     } catch (err) {
       // Animated WebP is a convenience — don't fail the whole screencast
       log('error', `Animated WebP generation failed: ${err.message}`);
