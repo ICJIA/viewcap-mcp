@@ -12,8 +12,11 @@ ViewCap replaces Chrome MCP's screenshot capability with a purpose-built, reliab
 
 - Captures full-page screenshots with automatic tiling into 1072x1072 chunks (Claude Vision's sweet spot)
 - Captures specific DOM elements by CSS selector
+- Captures multi-frame screencasts with animated WebP export
 - Returns base64 PNG images directly into your Claude conversation
 - Optionally saves screenshots to disk as PNG files
+- Standalone CLI for use outside of MCP clients
+- Auto-restart with exponential backoff for crash resilience
 - Runs as a local MCP server over stdio (no HTTP, no ports, no remote attack surface)
 
 ## Installation
@@ -100,7 +103,7 @@ If you have both Chrome MCP and viewcap registered, add this to your project's `
 
 ```markdown
 # Tool preferences
-- For all screenshots, use the `viewcap` MCP server (take_screenshot, capture_selector).
+- For all screenshots, use the `viewcap` MCP server (take_screenshot, capture_selector, take_screencast).
 - Use Chrome MCP for browser automation, DOM interaction, and navigation only.
 ```
 
@@ -188,6 +191,24 @@ Captures a screenshot of a specific DOM element by CSS selector.
 
 **Returns:** Single base64 PNG image content block (resized to fit 1072x1072), or file path if `directory` is set.
 
+### `take_screencast`
+
+Captures multiple frames of a web page over time. Only captures the top 1072x1072 viewport per frame.
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `url` | string | *(required)* | HTTP or HTTPS URL to capture |
+| `duration` | number | 10 | Total capture time in seconds (max 60) |
+| `interval` | number | 2 | Seconds between frames (min 0.5) |
+| `waitUntil` | string | `domcontentloaded` | Page load event |
+| `waitFor` | number | 0 | Pre-capture delay in ms (max 30000) |
+| `javascript` | string | — | JS to execute before first frame (requires `--allow-js` flag) |
+| `directory` | string | — | Save frames + animated WebP to this directory |
+
+**Returns:** Array of base64 PNG image content blocks (one per frame), or file paths if `directory` is set. When saving to directory, also generates an animated WebP.
+
+**Limits:** Maximum 20 frames per screencast, maximum 60 seconds duration.
+
 ## Usage examples
 
 From Claude Code or Cursor, just ask naturally:
@@ -198,6 +219,56 @@ From Claude Code or Cursor, just ask naturally:
 "Capture the #header element on localhost:3000"
 "Take a screenshot of localhost:3000 and save it to ./screenshots"
 "Screenshot localhost:3000 with fullPage set to false"
+"Record 5 frames of localhost:3000 every 2 seconds"
+"Take a screencast of localhost:3000 for 10 seconds and save to ./recordings"
+```
+
+## CLI (standalone usage)
+
+ViewCap includes a standalone CLI for use outside of MCP clients:
+
+```bash
+# Install globally (or use npx)
+npm install -g @icjia/viewcap
+
+# Full-page screenshot
+viewcap capture https://example.com -o screenshot.png
+
+# Viewport only (no full-page scroll)
+viewcap capture https://example.com --no-full-page -o shot.png
+
+# Capture a specific element
+viewcap selector https://example.com "#main-content" -o element.png
+
+# Wait for SPA to render
+viewcap capture http://localhost:3000 --wait-until networkidle0 --wait-for 2000 -o app.png
+
+# Save tiles to a directory
+viewcap capture https://example.com -d ./screenshots
+
+# Screencast: capture frames over time
+viewcap screencast http://localhost:3000 --duration 10 --interval 2 -d ./recordings
+
+# With JS injection
+viewcap --allow-js capture http://localhost:3000 --js "document.querySelector('.modal').remove()" -o clean.png
+
+# Verbose logging
+viewcap --verbose capture http://localhost:3000 -o debug.png
+```
+
+## Auto-restart
+
+When running as an MCP server (the default mode), ViewCap includes an auto-restart wrapper that recovers from crashes:
+
+- Exponential backoff: 1s, 2s, 4s, 8s... up to 30s
+- Maximum 10 restart attempts within a 1-minute window
+- Graceful shutdown on SIGINT/SIGTERM
+- All restarts logged to stderr
+
+To bypass the restart wrapper (useful for debugging):
+
+```bash
+node src/restart.js --no-restart
 ```
 
 ## Testing
@@ -210,13 +281,15 @@ npm test
 node --test test/url-validation.test.js
 ```
 
-The test suite covers:
+The test suite (66 tests) covers:
 - **URL validation** — scheme whitelist, hostname blocklist, metadata endpoint blocking
 - **Directory validation** — path traversal prevention, symlink escape detection
 - **Tiling logic** — tile positions, overlap, max-tile cap, edge cases
 - **Config constants** — sanity checks on all configuration values
 - **JS injection gate** — disabled by default, enabled with `--allow-js`
 - **IP blocking** — localhost bypass, external hostname resolution
+- **Screencast limits** — frame count, duration caps
+- **Logging** — verbosity levels
 
 ## Local development
 
@@ -264,10 +337,13 @@ src/
 ├── server.js ........... MCP server init + tool handlers
 ├── browser.js .......... Singleton Puppeteer lifecycle + idle cleanup
 ├── capture.js .......... Screenshot, resize, tile, selector capture
-└── config.js ........... Constants
+├── screencast.js ....... Multi-frame capture + animated WebP
+├── restart.js .......... Auto-restart wrapper with exponential backoff
+├── cli.js .............. Commander-based standalone CLI
+└── config.js ........... Constants + logging helper
 ```
 
-~400 lines total. Five dependencies: `@modelcontextprotocol/server`, `zod`, `puppeteer`, `sharp`, `@cfworker/json-schema`.
+Six dependencies: `@modelcontextprotocol/server`, `zod`, `puppeteer`, `sharp`, `commander`, `@cfworker/json-schema`.
 
 ## Security
 
@@ -299,6 +375,8 @@ ViewCap runs locally over stdio — no network listener, no ports, no remote att
 | Resource | Limit |
 |----------|-------|
 | Screenshot tiles | 8 max |
+| Screencast frames | 20 max |
+| Screencast duration | 60s max |
 | Page navigation timeout | 30s |
 | `waitFor` delay | 30s max |
 | Selector wait timeout | 15s max |
@@ -310,7 +388,9 @@ ViewCap runs locally over stdio — no network listener, no ports, no remote att
 | Flag | Description |
 |------|-------------|
 | `--allow-js` | Enable JavaScript injection via the `javascript` parameter |
-| *(default)* | JS injection disabled, errors and key events logged to stderr |
+| `--verbose` | Log navigation events, tile counts, timing, browser lifecycle |
+| `--quiet` | Log errors only |
+| `--no-restart` | Bypass auto-restart wrapper (run server directly) |
 
 ## Browser lifecycle
 

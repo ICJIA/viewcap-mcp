@@ -21,6 +21,7 @@ function resetIdleTimer() {
   idleTimer = setTimeout(async () => {
     if (browser) {
       console.error('[viewcap] Idle timeout — closing browser');
+      intentionalClose = true;
       try { await browser.close(); } catch {}
       browser = null;
     }
@@ -39,7 +40,9 @@ async function launchBrowser() {
   }
 
   browser.on('disconnected', () => {
-    console.error('[viewcap] Browser disconnected unexpectedly');
+    if (!intentionalClose) {
+      console.error('[viewcap] Browser disconnected unexpectedly');
+    }
     browser = null;
     if (idleTimer) clearTimeout(idleTimer);
   });
@@ -64,9 +67,12 @@ export async function closePage(page) {
   }
 }
 
+let intentionalClose = false;
+
 export async function shutdown() {
   if (idleTimer) clearTimeout(idleTimer);
   if (browser) {
+    intentionalClose = true;
     try { await browser.close(); } catch {}
     browser = null;
   }

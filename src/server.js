@@ -3,10 +3,15 @@
 import { McpServer, StdioServerTransport } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { takeScreenshot, captureSelector, setAllowJs } from './capture.js';
+import { takeScreencast } from './screencast.js';
+import { setVerbosity } from './config.js';
 
 const allowJs = process.argv.includes('--allow-js');
 if (allowJs) console.error('[viewcap] JavaScript injection ENABLED');
 setAllowJs(allowJs);
+
+if (process.argv.includes('--verbose')) setVerbosity('verbose');
+if (process.argv.includes('--quiet')) setVerbosity('quiet');
 
 const server = new McpServer({
   name: 'viewcap',
@@ -63,6 +68,30 @@ server.registerTool(
   }
 );
 
-console.error('[viewcap] Server started — tools: take_screenshot, capture_selector');
+server.registerTool(
+  'take_screencast',
+  {
+    description: 'Capture multiple frames of a web page over time. Returns one image per frame. Only captures the top 1072x1072 viewport per frame. When saving to directory, also generates an animated WebP.',
+    inputSchema: z.object({
+      url: z.string().describe('HTTP or HTTPS URL to capture'),
+      duration: z.number().min(1).max(60).default(10).describe('Total capture time in seconds (max 60)'),
+      interval: z.number().min(0.5).max(30).default(2).describe('Seconds between frames'),
+      waitUntil: z.enum(['load', 'domcontentloaded', 'networkidle0', 'networkidle2']).default('domcontentloaded').describe('Page load event to wait for'),
+      waitFor: z.number().int().min(0).default(0).describe('Pre-capture delay in ms (max 30000)'),
+      javascript: z.string().optional().describe('JS to execute before first frame (requires --allow-js flag)'),
+      directory: z.string().optional().describe('Save frames + animated WebP to this directory'),
+    }),
+  },
+  async (params) => {
+    try {
+      const content = await takeScreencast(params);
+      return { content };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }] };
+    }
+  }
+);
+
+console.error('[viewcap] Server started — tools: take_screenshot, capture_selector, take_screencast');
 const transport = new StdioServerTransport();
 await server.connect(transport);
