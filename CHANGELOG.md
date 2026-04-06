@@ -19,6 +19,11 @@ Red/blue team adversarial audit identified and resolved the following:
 **Medium**
 - External URL logging included full URL with query parameters, risking token leakage. Now logs hostname only.
 
+### Test coverage (97 tests)
+- Added RFC1918 private IP prefix verification (all 172.16-31.x ranges, 10.x, 192.168.x, fe80:, fd00:) with boundary checks for public IPs
+- Added CLI clampInt/clampFloat tests: NaN, Infinity, out-of-range, empty strings, OOM-level dimensions
+- Added directory validation: symlink escape from /tmp to /etc, realpath verification on macOS, additional reject paths
+
 ### What passed audit (no changes needed)
 - JavaScript injection gate: properly isolated, no bypass vectors
 - Error message sanitization: generic messages to Claude, details to stderr only

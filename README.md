@@ -281,13 +281,15 @@ npm test
 node --test test/url-validation.test.js
 ```
 
-The test suite (66 tests) covers:
+The test suite (97 tests) covers:
 - **URL validation** — scheme whitelist, hostname blocklist, metadata endpoint blocking
 - **Directory validation** — path traversal prevention, symlink escape detection
 - **Tiling logic** — tile positions, overlap, max-tile cap, edge cases
 - **Config constants** — sanity checks on all configuration values
 - **JS injection gate** — disabled by default, enabled with `--allow-js`
-- **IP blocking** — localhost bypass, external hostname resolution
+- **IP blocking** — localhost bypass, external hostname resolution, RFC1918 prefix coverage (all 172.16-31.x, 10.x, 192.168.x, fe80:, fd00:), public IP boundary checks
+- **CLI input validation** — clampInt/clampFloat with NaN, Infinity, out-of-range, OOM-level dimensions, boundary cases
+- **Symlink escape** — /tmp→/etc symlink attack, realpath verification on macOS
 - **Screencast limits** — frame count, duration caps
 - **Logging** — verbosity levels
 
