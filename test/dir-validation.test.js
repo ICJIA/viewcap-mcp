@@ -65,4 +65,48 @@ describe('validateOutputDir', () => {
       assert.ok(!err.message.includes(os.homedir()));
     }
   });
+
+  it('rejects /var/log (outside allowed paths)', () => {
+    assert.throws(() => validateOutputDir('/var/log/viewcap'), {
+      message: 'Output directory is outside allowed paths',
+    });
+  });
+
+  it('rejects /usr/local (outside allowed paths)', () => {
+    assert.throws(() => validateOutputDir('/usr/local/viewcap'), {
+      message: 'Output directory is outside allowed paths',
+    });
+  });
+
+  it('accepts deeply nested path under /tmp', () => {
+    const dir = `/tmp/viewcap-test-${Date.now()}/a/b/c/d`;
+    testDirs.push(`/tmp/viewcap-test-${dir.split('viewcap-test-')[1].split('/')[0]}`);
+    const result = validateOutputDir(dir);
+    assert.ok(fs.existsSync(result));
+  });
+
+  it('rejects symlink escape from /tmp to /etc', () => {
+    // Create a symlink in /tmp that points outside allowed paths
+    const linkDir = `/tmp/viewcap-symlink-test-${Date.now()}`;
+    testDirs.push(linkDir);
+    try {
+      fs.symlinkSync('/etc', linkDir);
+      assert.throws(() => validateOutputDir(path.join(linkDir, 'viewcap')), {
+        message: 'Output directory is outside allowed paths',
+      });
+    } finally {
+      try { fs.unlinkSync(linkDir); } catch {}
+    }
+  });
+
+  it('returned path is the real path (no symlinks)', () => {
+    const dir = '/tmp/viewcap-realpath-test-' + Date.now();
+    testDirs.push(dir);
+    const result = validateOutputDir(dir);
+    // On macOS, /tmp -> /private/tmp, so result should be under /private/tmp
+    if (process.platform === 'darwin') {
+      assert.ok(result.startsWith('/private/tmp'), `Expected /private/tmp prefix, got ${result}`);
+    }
+    assert.ok(fs.existsSync(result));
+  });
 });
