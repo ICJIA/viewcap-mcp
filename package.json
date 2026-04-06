@@ -1,6 +1,6 @@
 {
   "name": "@icjia/viewcap",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "MCP screenshot server for Claude Code — Vision-optimized page capture with automatic tiling",
   "type": "module",
   "main": "src/server.js",
