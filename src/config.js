@@ -1,3 +1,10 @@
+import { readFileSync } from 'fs';
+
+// Single source of truth for the version — package.json.
+export const VERSION = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+).version;
+
 export const CONFIG = {
   MAX_DIMENSION: 1072,
   TILE_OVERLAP: 50,

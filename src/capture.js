@@ -180,10 +180,13 @@ async function _takeScreenshot({ url, width, height, fullPage, waitUntil, waitFo
     workHeight = resizedMeta.height;
   }
 
+  // One timestamp per capture so all tiles share a filename prefix
+  const timestamp = Date.now();
+
   // Single image — no tiling needed
   if (workHeight <= CONFIG.MAX_DIMENSION) {
     if (outputDir) {
-      const filePath = path.join(outputDir, `screenshot-${Date.now()}-tile-1.png`);
+      const filePath = path.join(outputDir, `screenshot-${timestamp}-tile-1.png`);
       fs.writeFileSync(filePath, workBuffer);
       return [{ type: 'text', text: filePath }];
     }
@@ -202,7 +205,7 @@ async function _takeScreenshot({ url, width, height, fullPage, waitUntil, waitFo
       .toBuffer();
 
     if (outputDir) {
-      const filePath = path.join(outputDir, `screenshot-${Date.now()}-tile-${i + 1}.png`);
+      const filePath = path.join(outputDir, `screenshot-${timestamp}-tile-${i + 1}.png`);
       fs.writeFileSync(filePath, tileBuffer);
       content.push({ type: 'text', text: filePath });
     } else {

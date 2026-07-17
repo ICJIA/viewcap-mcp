@@ -5,13 +5,14 @@ import fs from 'fs';
 import path from 'path';
 import { takeScreenshot, captureSelector, setAllowJs } from './capture.js';
 import { takeScreencast } from './screencast.js';
-import { setVerbosity } from './config.js';
+import { setVerbosity, VERSION } from './config.js';
 import { shutdown } from './browser.js';
+import { isCliInvocation } from './routing.js';
 
 program
   .name('viewcap')
   .description('Vision-optimized web page screenshot tool')
-  .version('0.1.1');
+  .version(VERSION);
 
 // Global options
 program
@@ -182,11 +183,10 @@ program
     }
   });
 
-// Default command: start MCP server (when no subcommand given)
-if (process.argv.length <= 2 || process.argv[2].startsWith('-')) {
-  // No subcommand — run as MCP server
-  // Import server.js dynamically to start MCP mode
-  await import('./server.js');
-} else {
+// CLI when a subcommand or help/version flag is present anywhere in the args
+// (global flags like --allow-js may precede the subcommand); MCP server otherwise.
+if (isCliInvocation(process.argv.slice(2))) {
   program.parse();
+} else {
+  await import('./server.js');
 }

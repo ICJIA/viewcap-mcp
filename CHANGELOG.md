@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.1.4 — 2026-07-17
+
+### Fixed
+
+- **Idle timer killed the browser mid-capture.** The 60s idle shutdown timer was armed when an operation *started* (`getPage`), so any single capture running longer than 60s — e.g. a screencast near the documented 60s max, or a slow page plus a long `waitFor` — had Chromium closed underneath it and failed with `Protocol error: Session closed`. The timer is now disarmed while a page is in use and re-armed when the operation finishes, so the idle countdown only runs between operations.
+- **`--help`, `--version`, and global flags before a subcommand silently started the MCP server.** Routing only looked at the first argument, so `viewcap --help` (the README's own smoke test) and `viewcap --allow-js capture <url>` (a documented CLI example) hung as a stdio server instead of running the CLI. Routing now detects a subcommand anywhere in the args and sends `--help`/`--version` to the CLI (new `src/routing.js`, shared by `restart.js` and `cli.js`).
+- **"Animated" WebP output was a static image.** Screencast WebP generation passed a `pageHeight` option that sharp does not support, silently producing a static vertically-stacked strip instead of an animation. Now built with sharp's `join: { animated: true }` API, and the frame delay matches the capture `interval` (was hardcoded 1000ms). Note: consecutive identical frames are deduplicated by libvips with their delays accumulated, so the animation timeline is preserved for partially-static pages.
+- **Version drift (again).** `server.js` and `cli.js` hardcoded `0.1.1` while package.json said `0.1.3` — the same class of bug hand-fixed in 0.1.1, regressed by the next release bump. The version is now read from package.json at startup (`VERSION` in `config.js`), so MCP `serverInfo` and `viewcap --version` can no longer drift.
+- Tiles of one capture now share a single timestamp prefix — `Date.now()` was called per tile, so tiles of the same screenshot got different, ungroupable filenames.
+- After an idle shutdown, an unexpected crash of the *next* browser instance was silently treated as intentional (`intentionalClose` was never reset on relaunch).
+
+### Testing
+
+- Unit suite: 97 → 106 tests (CLI/server routing detection, version single-source).
+- New integration suite (`npm run test:integration`, 7 tests) driving real Chromium against a local HTTP server: operations longer than the idle timeout, idle re-arm, animated WebP page count and frame delay, tile filename grouping, and `restart.js` bin routing end-to-end.
+
 ## 0.1.3 — 2026-07-01
 
 ### Fixed

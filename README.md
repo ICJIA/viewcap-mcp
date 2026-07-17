@@ -279,9 +279,12 @@ npm test
 
 # Run a specific test file
 node --test test/url-validation.test.js
+
+# Run the integration suite (launches real Chromium against a local HTTP server)
+npm run test:integration
 ```
 
-The test suite (97 tests) covers:
+The unit suite (106 tests) covers:
 - **URL validation** — scheme whitelist, hostname blocklist, metadata endpoint blocking
 - **Directory validation** — path traversal prevention, symlink escape detection
 - **Tiling logic** — tile positions, overlap, max-tile cap, edge cases
@@ -292,6 +295,10 @@ The test suite (97 tests) covers:
 - **Symlink escape** — /tmp→/etc symlink attack, realpath verification on macOS
 - **Screencast limits** — frame count, duration caps
 - **Logging** — verbosity levels
+- **CLI/server routing** — subcommand detection with leading global flags, `--help`/`--version` handling
+- **Version** — single source of truth in package.json
+
+The integration suite (7 tests) drives real Chromium against a local HTTP server: operations longer than the idle timeout, idle re-arm after operations, animated WebP page count and frame delay, tile filename grouping, and `restart.js` bin routing (`--help`, `--version`, global flags before a subcommand).
 
 ## Local development
 
@@ -342,7 +349,8 @@ src/
 ├── screencast.js ....... Multi-frame capture + animated WebP
 ├── restart.js .......... Auto-restart wrapper with exponential backoff
 ├── cli.js .............. Commander-based standalone CLI
-└── config.js ........... Constants + logging helper
+├── routing.js .......... CLI vs MCP-server invocation detection
+└── config.js ........... Constants + version + logging helper
 ```
 
 Six dependencies: `@modelcontextprotocol/server`, `zod`, `puppeteer`, `sharp`, `commander`, `@cfworker/json-schema`.

@@ -93,33 +93,14 @@ async function _takeScreencast({ url, duration, interval, waitUntil, waitFor, ja
   if (outputDir && frames.length > 1) {
     try {
       const webpPath = path.join(outputDir, `screencast-${timestamp}.webp`);
-      const meta = await sharp(frames[0]).metadata();
-      const { width, height } = meta;
-
-      // Stack frames vertically, then use pageHeight to split into animation frames
-      const stacked = await sharp({
-        create: {
-          width,
-          height: height * frames.length,
-          channels: 4,
-          background: { r: 0, g: 0, b: 0, alpha: 0 },
-        },
-      })
-        .composite(
-          frames.map((buf, i) => ({
-            input: buf,
-            top: i * height,
-            left: 0,
-          }))
-        )
+      const animated = await sharp(frames, { join: { animated: true } })
         .webp({
           loop: 0,
-          delay: frames.map(() => 1000),
-          pageHeight: height,
+          delay: frames.map(() => Math.round(interval * 1000)),
         })
         .toBuffer();
 
-      fs.writeFileSync(webpPath, stacked);
+      fs.writeFileSync(webpPath, animated);
       content.push({ type: 'text', text: webpPath });
       log('info', `Screencast: animated WebP saved`);
     } catch (err) {

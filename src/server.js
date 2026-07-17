@@ -4,7 +4,7 @@ import { McpServer, StdioServerTransport } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { takeScreenshot, captureSelector, setAllowJs } from './capture.js';
 import { takeScreencast } from './screencast.js';
-import { setVerbosity } from './config.js';
+import { setVerbosity, VERSION } from './config.js';
 
 const allowJs = process.argv.includes('--allow-js');
 if (allowJs) console.error('[viewcap] JavaScript injection ENABLED');
@@ -15,7 +15,7 @@ if (process.argv.includes('--quiet')) setVerbosity('quiet');
 
 const server = new McpServer({
   name: 'viewcap',
-  version: '0.1.1',
+  version: VERSION,
 });
 
 server.registerTool(

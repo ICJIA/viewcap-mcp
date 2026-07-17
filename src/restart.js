@@ -3,6 +3,7 @@
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import path from 'path';
+import { isCliInvocation } from './routing.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,10 +12,9 @@ const cliPath = path.join(__dirname, 'cli.js');
 
 const args = process.argv.slice(2);
 
-// Detect CLI subcommands — these run cli.js directly (no restart wrapper)
-const CLI_COMMANDS = ['capture', 'selector', 'screencast'];
-const firstArg = args[0];
-const isCliMode = firstArg && CLI_COMMANDS.includes(firstArg);
+// CLI invocations (subcommand anywhere in args, or --help/--version) run
+// cli.js directly with no restart wrapper.
+const isCliMode = isCliInvocation(args);
 
 if (isCliMode) {
   // CLI mode — run cli.js directly, no restart wrapper

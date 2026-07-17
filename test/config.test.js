@@ -1,6 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'fs';
 import { CONFIG } from '../src/config.js';
+import * as config from '../src/config.js';
 
 describe('CONFIG', () => {
   it('MAX_DIMENSION is positive', () => {
@@ -59,5 +61,14 @@ describe('CONFIG', () => {
     assert.ok(CONFIG.LOCALHOST_HOSTS.includes('localhost'));
     assert.ok(CONFIG.LOCALHOST_HOSTS.includes('127.0.0.1'));
     assert.ok(CONFIG.LOCALHOST_HOSTS.includes('::1'));
+  });
+});
+
+describe('VERSION', () => {
+  it('matches package.json version (single source of truth)', () => {
+    const pkg = JSON.parse(
+      fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+    );
+    assert.equal(config.VERSION, pkg.version);
   });
 });
