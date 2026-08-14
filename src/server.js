@@ -4,6 +4,7 @@ import { McpServer, StdioServerTransport } from '@modelcontextprotocol/server';
 import * as z from 'zod/v4';
 import { takeScreenshot, captureSelector, setAllowJs } from './capture.js';
 import { takeScreencast } from './screencast.js';
+import { readPackageVersion, fetchLatestVersion } from './version.js';
 import { setVerbosity, VERSION } from './config.js';
 
 const allowJs = process.argv.includes('--allow-js');
@@ -92,6 +93,48 @@ server.registerTool(
   }
 );
 
-console.error('[viewcap] Server started — tools: take_screenshot, capture_selector, take_screencast');
+// ─── get_status ────────────────────────────────────────────────────
+
+const puppeteerVersion = readPackageVersion('puppeteer');
+const sharpVersion = readPackageVersion('sharp');
+
+// Non-blocking npm registry check, kicked off at startup
+let _latestVersion = null;
+const _latestPromise = fetchLatestVersion('@icjia/viewcap').then((v) => {
+  _latestVersion = v;
+  return v;
+});
+
+server.registerTool(
+  'get_status',
+  {
+    description: 'Returns viewcap server version, installed Puppeteer and sharp versions, whether JavaScript injection is enabled, and whether a newer viewcap version is available on npm.',
+    inputSchema: z.object({}),
+  },
+  async () => {
+    try {
+      const latest = _latestVersion ?? await _latestPromise;
+      const updateNote = (latest === 'unknown' || latest === VERSION)
+        ? '(latest)'
+        : `(latest: v${latest} — update available)`;
+
+      const text = [
+        'viewcap status',
+        `  Server:       @icjia/viewcap v${VERSION} ${updateNote}`,
+        `  Puppeteer:    v${puppeteerVersion}`,
+        `  sharp:        v${sharpVersion}`,
+        `  JS injection: ${allowJs ? 'enabled (--allow-js)' : 'disabled (launch with --allow-js to enable)'}`,
+        `  Node:         v${process.versions.node}`,
+        `  Platform:     ${process.platform} ${process.arch}`,
+      ].join('\n');
+
+      return { content: [{ type: 'text', text }] };
+    } catch (err) {
+      return { content: [{ type: 'text', text: `Error: ${err.message}` }] };
+    }
+  }
+);
+
+console.error('[viewcap] Server started — tools: take_screenshot, capture_selector, take_screencast, get_status');
 const transport = new StdioServerTransport();
 await server.connect(transport);

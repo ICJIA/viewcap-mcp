@@ -103,7 +103,7 @@ If you have both Chrome MCP and viewcap registered, add this to your project's `
 
 ```markdown
 # Tool preferences
-- For all screenshots, use the `viewcap` MCP server (take_screenshot, capture_selector, take_screencast).
+- For all screenshots, use the `viewcap` MCP server (take_screenshot, capture_selector, take_screencast, get_status).
 - Use Chrome MCP for browser automation, DOM interaction, and navigation only.
 ```
 
@@ -208,6 +208,20 @@ Captures multiple frames of a web page over time. Only captures the top 1072x107
 **Returns:** Array of base64 PNG image content blocks (one per frame), or file paths if `directory` is set. When saving to directory, also generates an animated WebP.
 
 **Limits:** Maximum 20 frames per screencast, maximum 60 seconds duration.
+
+### `get_status`
+
+Returns viewcap server version (with an npm update check), installed Puppeteer and sharp versions, whether JavaScript injection is enabled, Node version, and platform. Takes no parameters.
+
+```
+viewcap status
+  Server:       @icjia/viewcap v0.2.0 (latest)
+  Puppeteer:    v24.40.0
+  sharp:        v0.34.5
+  JS injection: disabled (launch with --allow-js to enable)
+  Node:         v22.22.2
+  Platform:     darwin arm64
+```
 
 ## Usage examples
 

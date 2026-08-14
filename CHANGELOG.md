@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.0 — 2026-08-14
+
+### Added
+
+- **`get_status` tool** — reports server version (with npm update check),
+  installed Puppeteer and sharp versions, whether JavaScript injection is
+  enabled (`--allow-js`), Node version, and platform. viewcap was the only
+  server in the axecap/lightcap/viewcap trio without one, so the installed
+  version could not be verified at runtime. The JS-injection line doubles as
+  discoverability for the flag: sessions that need theme/state screenshots
+  can now see whether injection is available before working around it.
+
 ## 0.1.4 — 2026-07-17
 
 ### Fixed
