@@ -5,17 +5,13 @@ import { CONFIG } from '../src/config.js';
 import * as config from '../src/config.js';
 
 describe('CONFIG', () => {
-  it('MAX_DIMENSION is positive', () => {
-    assert.ok(CONFIG.MAX_DIMENSION > 0);
+  it('MAX_VIEWPORT matches the high-res long edge (2576)', () => {
+    assert.equal(CONFIG.MAX_VIEWPORT, 2576);
   });
 
-  it('MAX_DIMENSION is 1072 (Claude Vision sweet spot)', () => {
-    assert.equal(CONFIG.MAX_DIMENSION, 1072);
-  });
-
-  it('TILE_OVERLAP is positive and less than MAX_DIMENSION', () => {
+  it('TILE_OVERLAP is positive and far smaller than any tile', () => {
     assert.ok(CONFIG.TILE_OVERLAP > 0);
-    assert.ok(CONFIG.TILE_OVERLAP < CONFIG.MAX_DIMENSION);
+    assert.ok(CONFIG.TILE_OVERLAP < 500);
   });
 
   it('MAX_TILES is positive', () => {
@@ -42,9 +38,9 @@ describe('CONFIG', () => {
     assert.ok(CONFIG.SELECTOR_MAX_LENGTH > 0);
   });
 
-  it('DEFAULT_VIEWPORT dimensions match MAX_DIMENSION', () => {
-    assert.equal(CONFIG.DEFAULT_VIEWPORT.width, CONFIG.MAX_DIMENSION);
-    assert.equal(CONFIG.DEFAULT_VIEWPORT.height, CONFIG.MAX_DIMENSION);
+  it('DEFAULT_VIEWPORT is a 1280x800 desktop, within MAX_VIEWPORT', () => {
+    assert.deepEqual(CONFIG.DEFAULT_VIEWPORT, { width: 1280, height: 800 });
+    assert.ok(CONFIG.DEFAULT_VIEWPORT.width <= CONFIG.MAX_VIEWPORT);
   });
 
   it('BLOCKED_HOSTNAMES includes cloud metadata endpoints', () => {

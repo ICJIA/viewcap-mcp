@@ -1,6 +1,14 @@
+![viewcap: screenshots and screencasts of web pages, sized for how Claude actually sees images](https://raw.githubusercontent.com/ICJIA/viewcap-mcp/main/docs/og-image.png)
+
 # @icjia/viewcap
 
+[![npm](https://img.shields.io/npm/v/@icjia/viewcap?color=111&label=npm)](https://www.npmjs.com/package/@icjia/viewcap)
+[![license: MIT](https://img.shields.io/badge/license-MIT-111)](LICENSE)
+![MCP server + CLI](https://img.shields.io/badge/runs%20as-MCP%20server%20%2B%20CLI-111)
+
 A lightweight local MCP server that does one thing well: takes screenshots of web pages optimized for Claude Vision.
+
+**New in 0.3: sized for current Claude models.** Claude 4.7 and later (Opus 4.7 through 5.5, Sonnet 5 and 5.5, Haiku 5.5, Fable 5.x) read images at up to 2576 px and 4784 visual tokens, more than double the old limit viewcap was built around. viewcap now captures real desktop widths (default 1280×800, up to 2576) and sizes every image to what the model reads at full resolution. See [Image sizing for Claude](#image-sizing-for-claude).
 
 ## Why?
 
@@ -10,7 +18,7 @@ ViewCap replaces Chrome MCP's screenshot capability with a purpose-built, reliab
 
 ## What it does
 
-- Captures full-page screenshots with automatic tiling into 1072x1072 chunks (Claude Vision's sweet spot)
+- Captures full-page screenshots, tiled so each image fits what Claude reads at full resolution (up to 2576 px / 4784 visual tokens on Claude 4.7+)
 - Captures specific DOM elements by CSS selector
 - Captures multi-frame screencasts with animated WebP export
 - Returns base64 PNG images directly into your Claude conversation
@@ -162,8 +170,8 @@ Captures a full-page or viewport screenshot with automatic tiling.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `url` | string | *(required)* | HTTP or HTTPS URL to screenshot |
-| `width` | number | 1072 | Viewport width in pixels (max 1072) |
-| `height` | number | 1072 | Viewport height in pixels (max 1072) |
+| `width` | number | 1280 | Viewport width in pixels (max 2576) |
+| `height` | number | 800 | Viewport height in pixels (max 2576) |
 | `fullPage` | boolean | true | Capture full scrollable page with automatic tiling |
 | `waitUntil` | string | `domcontentloaded` | Page load event: `load`, `domcontentloaded`, `networkidle0`, `networkidle2` |
 | `waitFor` | number | 0 | Additional delay in ms after page load (max 30000) |
@@ -172,7 +180,7 @@ Captures a full-page or viewport screenshot with automatic tiling.
 
 **Returns:** Array of base64 PNG image content blocks (one per tile), or file paths if `directory` is set.
 
-**Tiling:** Full-page screenshots taller than 1072px are automatically split into 1072x1072 tiles with 50px overlap for context continuity. Maximum 8 tiles per screenshot (covers pages up to ~8200px tall).
+**Tiling:** Full-page screenshots too tall for one image are split into tiles with 50px overlap for context continuity. Each tile is as tall as the vision tier allows for the page's width (2576 px at 1280 wide on the high tier), so a typical page needs half as many tiles as before. Maximum 8 tiles per screenshot. See [Image sizing for Claude](#image-sizing-for-claude).
 
 ### `capture_selector`
 
@@ -182,18 +190,18 @@ Captures a screenshot of a specific DOM element by CSS selector.
 |-----------|------|---------|-------------|
 | `url` | string | *(required)* | HTTP or HTTPS URL to load |
 | `selector` | string | *(required)* | CSS selector for the target element |
-| `width` | number | 1072 | Viewport width in pixels (max 1072) |
-| `height` | number | 1072 | Viewport height in pixels (max 1072) |
+| `width` | number | 1280 | Viewport width in pixels (max 2576) |
+| `height` | number | 800 | Viewport height in pixels (max 2576) |
 | `waitUntil` | string | `domcontentloaded` | Page load event |
 | `waitFor` | number | 0 | Additional delay in ms after page load (max 30000) |
 | `selectorTimeout` | number | 5000 | Max ms to wait for selector to appear (max 15000) |
 | `directory` | string | — | Save PNG to this directory; returns file path instead of base64 |
 
-**Returns:** Single base64 PNG image content block (resized to fit 1072x1072), or file path if `directory` is set.
+**Returns:** Single base64 PNG image content block (resized, if needed, to fit the vision tier), or file path if `directory` is set.
 
 ### `take_screencast`
 
-Captures multiple frames of a web page over time. Only captures the top 1072x1072 viewport per frame.
+Captures multiple frames of a web page over time. Captures the top 1280x800 viewport per frame.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -223,6 +231,43 @@ viewcap status
   Platform:     darwin arm64
 ```
 
+## Image sizing for Claude
+
+Claude reads images in 28×28-pixel patches, called visual tokens: an image costs `⌈width/28⌉ × ⌈height/28⌉` tokens. Each model generation has a maximum long edge and a maximum token count. Anything larger is scaled down by the API before the model sees it, which blurs small text and wastes the pixels you sent.
+
+| Vision tier | Models | Max long edge | Max visual tokens |
+|---|---|---|---|
+| `high` (default) | Claude 4.7 and later: Opus 4.7, 4.8, 5, 5.5 · Sonnet 5, 5.5 · Haiku 5.5 · Fable / Mythos 5.x | 2576 px | 4784 |
+| `standard` | Older models: Opus 4.6, Sonnet 4.6, Haiku 4.5 and earlier | 1568 px | 1568 |
+
+viewcap sizes every image it returns to fit the active tier exactly, so nothing gets scaled again on the way in:
+
+- **Viewport screenshots** pass through at full size when they fit. A 1920×1080 capture is 2,691 tokens on the high tier, unchanged.
+- **Full pages** are tiled, and each tile is as tall as the tier allows for that width. At 1280 px wide on the high tier, that's a 2576 px tile (4,232 tokens), so a typical page needs half as many images as with the old 1072 px tiles.
+- **Elements and screencast frames** are scaled down only if they exceed the tier.
+
+Pick the tier for the model you use:
+
+```bash
+claude mcp add viewcap -s user -- npx -y @icjia/viewcap --vision-tier=standard   # MCP server arg
+VIEWCAP_VISION_TIER=standard viewcap capture https://example.com                # env var (MCP or CLI)
+viewcap --vision-tier standard capture https://example.com                      # CLI flag
+```
+
+`get_status` (and `viewcap --help`) shows the active tier.
+
+**Before 0.3**, viewcap capped viewports and images at 1072 px, tuned for the standard tier's ~1.15-megapixel sweet spot. That made 1280, 1440 and 1920 px desktop breakpoints impossible to capture at their real width.
+
+**Token cost** scales with pixel area, not content. Higher-resolution images cost more per image, but a tier-sized tile covers more of the page, so a full page costs about the same in total while text stays sharp. If you need to save tokens, capture a smaller viewport (`width`/`height`) or a single element (`capture_selector`).
+
+**Many images in one conversation:** when a single API request contains more than 20 images, the API applies a stricter per-image size limit to all of them, and screenshots from earlier turns count. viewcap keeps tile counts low (at most 8 per capture), but in a long session with many full-page captures, prefer viewport or element shots.
+
+## MCP or CLI?
+
+The other ICJIA tools (axecap, lightcap and contrastcap) now work well as plain CLIs, because their output is text. viewcap is different: its output is **images**, and only an MCP tool can hand an image straight to the model. A shell command can only return text, so Claude would have to save a PNG and then open it, two steps instead of one, for the same image tokens. **For Claude, keep viewcap as an MCP server.**
+
+The `viewcap` CLI is still useful wherever images go to files instead of to a model: saving screenshots for a report or a pull request, CI visual checks, or scripts. See [CLI (standalone usage)](#cli-standalone-usage).
+
 ## Usage examples
 
 From Claude Code or Cursor, just ask naturally:
@@ -251,6 +296,12 @@ viewcap capture https://example.com -o screenshot.png
 # Viewport only (no full-page scroll)
 viewcap capture https://example.com --no-full-page -o shot.png
 
+# Real desktop breakpoints (default 1280x800, max 2576)
+viewcap capture http://localhost:3000 -w 1920 -h 1080 --no-full-page -o desktop-1920.png
+
+# Size images for an older (standard-tier) model
+viewcap --vision-tier standard capture https://example.com -o shot.png
+
 # Capture a specific element
 viewcap selector https://example.com "#main-content" -o element.png
 
@@ -268,6 +319,10 @@ viewcap --allow-js capture http://localhost:3000 --js "document.querySelector('.
 
 # Verbose logging
 viewcap --verbose capture http://localhost:3000 -o debug.png
+
+# Versions and help (plain `viewcap` at a terminal shows help too)
+viewcap --version     # viewcap v0.3.0 (Puppeteer v24.x)
+viewcap --help        # also shows the active vision tier
 ```
 
 ## Auto-restart
@@ -402,7 +457,7 @@ An adversarial red/blue team audit was conducted after the initial release. All 
 
 ### Input validation
 
-- **MCP path:** All parameters validated by Zod schemas with enforced min/max bounds. `waitFor` capped at 30s, `selectorTimeout` at 15s, viewport dimensions at 1072px.
+- **MCP path:** All parameters validated by Zod schemas with enforced min/max bounds. `waitFor` capped at 30s, `selectorTimeout` at 15s, viewport dimensions at 2576px.
 - **CLI path:** All numeric inputs validated with bounds checking (`clampInt`/`clampFloat`), preventing OOM from oversized dimensions or indefinite hangs from uncapped timeouts.
 - **Request serialization:** A single shared async queue serializes all capture operations (screenshots, selectors, and screencasts) to prevent concurrent Puppeteer page collisions.
 
@@ -417,7 +472,7 @@ An adversarial red/blue team audit was conducted after the initial release. All 
 | `waitFor` delay | 30s max | Zod schema + capture.js |
 | Selector wait timeout | 15s max | Zod schema + capture.js |
 | Selector string length | 1000 chars max | capture.js |
-| Viewport dimensions | 1072px max | Zod schema + CLI clamp |
+| Viewport dimensions | 2576px max | Zod schema + CLI clamp |
 | Browser idle shutdown | 60s | browser.js |
 
 ### Known limitations

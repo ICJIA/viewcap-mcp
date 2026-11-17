@@ -5,20 +5,38 @@ import fs from 'fs';
 import path from 'path';
 import { takeScreenshot, captureSelector, setAllowJs } from './capture.js';
 import { takeScreencast } from './screencast.js';
-import { setVerbosity, VERSION } from './config.js';
+import { setVerbosity, VERSION, getVisionTier, getVisionLimits } from './config.js';
+import { readPackageVersion } from './version.js';
 import { shutdown } from './browser.js';
 import { isCliInvocation } from './routing.js';
+
+const puppeteerVersion = readPackageVersion('puppeteer');
+const tierLimits = getVisionLimits();
 
 program
   .name('viewcap')
   .description('Vision-optimized web page screenshot tool')
-  .version(VERSION);
+  .version(`viewcap v${VERSION} (Puppeteer v${puppeteerVersion})`, '-V, --version', 'Show viewcap and Puppeteer versions')
+  .addHelpText('before', `viewcap v${VERSION} — Puppeteer v${puppeteerVersion} — vision tier: ${getVisionTier()} (${tierLimits.maxEdge} px / ${tierLimits.maxTokens} tokens)\n`)
+  .addHelpText('after', `
+Examples:
+  viewcap capture https://example.com -o page.png          full page (tiles: page-tile-1.png ...)
+  viewcap capture http://localhost:3000 -w 1920 -h 1080 --no-full-page
+  viewcap selector http://localhost:3000 'header nav' -o nav.png
+  viewcap screencast http://localhost:3000 -d ./frames      frames + animated WebP
+
+Images are sized to what Claude reads at full resolution: --vision-tier high
+(Claude 4.7 and later, the default) or standard (older models), or set
+VIEWCAP_VISION_TIER.
+
+With no arguments and piped stdin (as MCP clients launch it), viewcap runs as an MCP server.`);
 
 // Global options
 program
   .option('--allow-js', 'Enable JavaScript injection')
   .option('--verbose', 'Verbose logging')
-  .option('--quiet', 'Errors only');
+  .option('--quiet', 'Errors only')
+  .option('--vision-tier <tier>', 'Size images for Claude: high (Claude 4.7+, 2576 px) or standard (older models, 1568 px); default high, or VIEWCAP_VISION_TIER');
 
 import { CONFIG } from './config.js';
 
@@ -44,8 +62,8 @@ program
   .command('capture <url>')
   .description('Take a screenshot of a web page')
   .option('-o, --output <path>', 'Output file path (PNG)', 'screenshot.png')
-  .option('-w, --width <n>', 'Viewport width', '1072')
-  .option('-h, --height <n>', 'Viewport height', '1072')
+  .option('-w, --width <n>', 'Viewport width (max 2576)', '1280')
+  .option('-h, --height <n>', 'Viewport height (max 2576)', '800')
   .option('--no-full-page', 'Capture viewport only, no full-page scroll')
   .option('--wait-until <event>', 'Page load event', 'domcontentloaded')
   .option('--wait-for <ms>', 'Additional delay in ms', '0')
@@ -56,8 +74,8 @@ program
     try {
       const params = {
         url,
-        width: clampInt(opts.width, 1, CONFIG.MAX_DIMENSION, CONFIG.MAX_DIMENSION),
-        height: clampInt(opts.height, 1, CONFIG.MAX_DIMENSION, CONFIG.MAX_DIMENSION),
+        width: clampInt(opts.width, 1, CONFIG.MAX_VIEWPORT, CONFIG.DEFAULT_VIEWPORT.width),
+        height: clampInt(opts.height, 1, CONFIG.MAX_VIEWPORT, CONFIG.DEFAULT_VIEWPORT.height),
         fullPage: opts.fullPage,
         waitUntil: opts.waitUntil,
         waitFor: clampInt(opts.waitFor, 0, CONFIG.WAIT_FOR_MAX, 0),
@@ -101,8 +119,8 @@ program
   .command('selector <url> <selector>')
   .description('Capture a specific DOM element')
   .option('-o, --output <path>', 'Output file path (PNG)', 'element.png')
-  .option('-w, --width <n>', 'Viewport width', '1072')
-  .option('-h, --height <n>', 'Viewport height', '1072')
+  .option('-w, --width <n>', 'Viewport width (max 2576)', '1280')
+  .option('-h, --height <n>', 'Viewport height (max 2576)', '800')
   .option('--wait-until <event>', 'Page load event', 'domcontentloaded')
   .option('--wait-for <ms>', 'Additional delay in ms', '0')
   .option('--selector-timeout <ms>', 'Max ms to wait for selector', '5000')
@@ -113,8 +131,8 @@ program
       const params = {
         url,
         selector,
-        width: clampInt(opts.width, 1, CONFIG.MAX_DIMENSION, CONFIG.MAX_DIMENSION),
-        height: clampInt(opts.height, 1, CONFIG.MAX_DIMENSION, CONFIG.MAX_DIMENSION),
+        width: clampInt(opts.width, 1, CONFIG.MAX_VIEWPORT, CONFIG.DEFAULT_VIEWPORT.width),
+        height: clampInt(opts.height, 1, CONFIG.MAX_VIEWPORT, CONFIG.DEFAULT_VIEWPORT.height),
         waitUntil: opts.waitUntil,
         waitFor: clampInt(opts.waitFor, 0, CONFIG.WAIT_FOR_MAX, 0),
         selectorTimeout: clampInt(opts.selectorTimeout, 0, CONFIG.SELECTOR_TIMEOUT_MAX, CONFIG.SELECTOR_TIMEOUT_DEFAULT),
@@ -185,7 +203,11 @@ program
 
 // CLI when a subcommand or help/version flag is present anywhere in the args
 // (global flags like --allow-js may precede the subcommand); MCP server otherwise.
-if (isCliInvocation(process.argv.slice(2))) {
+const cliArgs = process.argv.slice(2);
+if (cliArgs.length === 0 && process.stdin.isTTY) {
+  // Bare `viewcap` typed at a terminal: show help on stdout and exit 0.
+  program.help();
+} else if (isCliInvocation(cliArgs, Boolean(process.stdin.isTTY))) {
   program.parse();
 } else {
   await import('./server.js');

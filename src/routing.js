@@ -5,6 +5,11 @@ export const CLI_COMMANDS = ['capture', 'selector', 'screencast'];
 
 const HELP_VERSION_FLAGS = ['--help', '-h', '--version', '-V'];
 
-export function isCliInvocation(args) {
+// A bare invocation at an interactive terminal (a person typed `viewcap`) is
+// also a CLI run, so it prints help instead of silently starting the MCP
+// server and waiting for JSON-RPC. MCP clients always pipe stdin, so they
+// still get the server.
+export function isCliInvocation(args, stdinIsTTY = false) {
+  if (args.length === 0 && stdinIsTTY) return true;
   return args.some((a) => CLI_COMMANDS.includes(a) || HELP_VERSION_FLAGS.includes(a));
 }

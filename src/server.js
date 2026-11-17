@@ -5,7 +5,7 @@ import * as z from 'zod/v4';
 import { takeScreenshot, captureSelector, setAllowJs } from './capture.js';
 import { takeScreencast } from './screencast.js';
 import { readPackageVersion, fetchLatestVersion } from './version.js';
-import { setVerbosity, VERSION } from './config.js';
+import { setVerbosity, VERSION, CONFIG, getVisionTier, getVisionLimits } from './config.js';
 
 const allowJs = process.argv.includes('--allow-js');
 if (allowJs) console.error('[viewcap] JavaScript injection ENABLED');
@@ -22,11 +22,11 @@ const server = new McpServer({
 server.registerTool(
   'take_screenshot',
   {
-    description: 'Capture a screenshot of a web page, optimized for Claude Vision. Full pages are automatically tiled into 1072x1072 chunks. Returns base64 PNG images.',
+    description: 'Capture a screenshot of a web page, optimized for Claude Vision. Images are sized to what Claude reads at full resolution (2576 px / 4784 visual tokens on Claude 4.7+); full pages are tiled to fit. Returns base64 PNG images.',
     inputSchema: z.object({
       url: z.string().describe('HTTP or HTTPS URL to screenshot'),
-      width: z.number().int().min(1).max(1072).default(1072).describe('Viewport width in pixels (max 1072)'),
-      height: z.number().int().min(1).max(1072).default(1072).describe('Viewport height in pixels (max 1072)'),
+      width: z.number().int().min(1).max(CONFIG.MAX_VIEWPORT).default(CONFIG.DEFAULT_VIEWPORT.width).describe('Viewport width in pixels (default 1280, max 2576)'),
+      height: z.number().int().min(1).max(CONFIG.MAX_VIEWPORT).default(CONFIG.DEFAULT_VIEWPORT.height).describe('Viewport height in pixels (default 800, max 2576)'),
       fullPage: z.boolean().default(true).describe('Capture full scrollable page with automatic tiling'),
       waitUntil: z.enum(['load', 'domcontentloaded', 'networkidle0', 'networkidle2']).default('domcontentloaded').describe('Page load event to wait for'),
       waitFor: z.number().int().min(0).max(30000).default(0).describe('Additional delay in ms after page load (max 30000)'),
@@ -51,8 +51,8 @@ server.registerTool(
     inputSchema: z.object({
       url: z.string().describe('HTTP or HTTPS URL to load'),
       selector: z.string().describe('CSS selector for the target element'),
-      width: z.number().int().min(1).max(1072).default(1072).describe('Viewport width in pixels (max 1072)'),
-      height: z.number().int().min(1).max(1072).default(1072).describe('Viewport height in pixels (max 1072)'),
+      width: z.number().int().min(1).max(CONFIG.MAX_VIEWPORT).default(CONFIG.DEFAULT_VIEWPORT.width).describe('Viewport width in pixels (default 1280, max 2576)'),
+      height: z.number().int().min(1).max(CONFIG.MAX_VIEWPORT).default(CONFIG.DEFAULT_VIEWPORT.height).describe('Viewport height in pixels (default 800, max 2576)'),
       waitUntil: z.enum(['load', 'domcontentloaded', 'networkidle0', 'networkidle2']).default('domcontentloaded').describe('Page load event to wait for'),
       waitFor: z.number().int().min(0).max(30000).default(0).describe('Additional delay in ms after page load (max 30000)'),
       selectorTimeout: z.number().int().min(0).max(15000).default(5000).describe('Max ms to wait for selector to appear (max 15000)'),
@@ -72,7 +72,7 @@ server.registerTool(
 server.registerTool(
   'take_screencast',
   {
-    description: 'Capture multiple frames of a web page over time. Returns one image per frame. Only captures the top 1072x1072 viewport per frame. When saving to directory, also generates an animated WebP.',
+    description: 'Capture multiple frames of a web page over time. Returns one image per frame. Captures the top 1280x800 viewport per frame. When saving to directory, also generates an animated WebP.',
     inputSchema: z.object({
       url: z.string().describe('HTTP or HTTPS URL to capture'),
       duration: z.number().min(1).max(60).default(10).describe('Total capture time in seconds (max 60)'),
@@ -124,6 +124,7 @@ server.registerTool(
         `  Puppeteer:    v${puppeteerVersion}`,
         `  sharp:        v${sharpVersion}`,
         `  JS injection: ${allowJs ? 'enabled (--allow-js)' : 'disabled (launch with --allow-js to enable)'}`,
+        `  Vision tier:  ${getVisionTier()} (images up to ${getVisionLimits().maxEdge} px / ${getVisionLimits().maxTokens} visual tokens; set with --vision-tier or VIEWCAP_VISION_TIER)`,
         `  Node:         v${process.versions.node}`,
         `  Platform:     ${process.platform} ${process.arch}`,
       ].join('\n');
@@ -135,6 +136,6 @@ server.registerTool(
   }
 );
 
-console.error('[viewcap] Server started — tools: take_screenshot, capture_selector, take_screencast, get_status');
+console.error(`[viewcap] Server started — tools: take_screenshot, capture_selector, take_screencast, get_status — vision tier: ${getVisionTier()}`);
 const transport = new StdioServerTransport();
 await server.connect(transport);

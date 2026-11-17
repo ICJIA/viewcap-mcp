@@ -14,7 +14,7 @@ const args = process.argv.slice(2);
 
 // CLI invocations (subcommand anywhere in args, or --help/--version) run
 // cli.js directly with no restart wrapper.
-const isCliMode = isCliInvocation(args);
+const isCliMode = isCliInvocation(args, Boolean(process.stdin.isTTY));
 
 if (isCliMode) {
   // CLI mode — run cli.js directly, no restart wrapper

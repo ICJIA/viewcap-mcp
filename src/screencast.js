@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { CONFIG, log } from './config.js';
 import { getPage, closePage } from './browser.js';
+import { fitBuffer } from './vision.js';
 
 // Import validation helpers and shared queue from capture.js
 import { _test, enqueue } from './capture.js';
@@ -27,7 +28,8 @@ async function _takeScreencast({ url, duration, interval, waitUntil, waitFor, ja
   const frames = [];
   let page;
   try {
-    page = await getPage(CONFIG.MAX_DIMENSION, CONFIG.MAX_DIMENSION);
+    const { width: vw, height: vh } = CONFIG.DEFAULT_VIEWPORT;
+    page = await getPage(vw, vh);
     await page.goto(url, { waitUntil, timeout: CONFIG.NAV_TIMEOUT });
 
     // Post-navigation recheck
@@ -53,7 +55,7 @@ async function _takeScreencast({ url, duration, interval, waitUntil, waitFor, ja
       const buffer = await page.screenshot({
         type: 'png',
         encoding: 'binary',
-        clip: { x: 0, y: 0, width: CONFIG.MAX_DIMENSION, height: CONFIG.MAX_DIMENSION },
+        clip: { x: 0, y: 0, width: vw, height: vh },
       });
 
       frames.push(buffer);
@@ -68,15 +70,8 @@ async function _takeScreencast({ url, duration, interval, waitUntil, waitFor, ja
   const timestamp = Date.now();
 
   for (let i = 0; i < frames.length; i++) {
-    const meta = await sharp(frames[i]).metadata();
-    let frameBuffer = frames[i];
-
-    if (meta.width > CONFIG.MAX_DIMENSION || meta.height > CONFIG.MAX_DIMENSION) {
-      frameBuffer = await sharp(frames[i])
-        .resize({ width: CONFIG.MAX_DIMENSION, height: CONFIG.MAX_DIMENSION, fit: 'inside' })
-        .png()
-        .toBuffer();
-    }
+    // Fit each frame to the vision tier's edge and token limits
+    const { buffer: frameBuffer } = await fitBuffer(frames[i]);
 
     if (outputDir) {
       const filePath = path.join(outputDir, `screencast-${timestamp}-frame-${i + 1}.png`);

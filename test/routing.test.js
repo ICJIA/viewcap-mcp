@@ -45,3 +45,16 @@ describe('isCliInvocation', () => {
     assert.deepEqual(CLI_COMMANDS, ['capture', 'selector', 'screencast']);
   });
 });
+
+describe('isCliInvocation with an interactive terminal', () => {
+  it('bare invocation with piped stdin starts the MCP server', () => {
+    assert.equal(isCliInvocation([], false), false);
+  });
+  it('bare invocation at a TTY is a CLI run (prints help)', () => {
+    assert.equal(isCliInvocation([], true), true);
+  });
+  it('server flags alone still start the server, TTY or not', () => {
+    assert.equal(isCliInvocation(['--allow-js'], false), false);
+    assert.equal(isCliInvocation(['--vision-tier=standard'], false), false);
+  });
+});
