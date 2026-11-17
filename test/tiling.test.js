@@ -6,20 +6,20 @@ import { CONFIG } from '../src/config.js';
 const { calculateTilePositions } = _test;
 
 describe('calculateTilePositions', () => {
-  it('returns single tile for image within MAX_DIMENSION', () => {
-    const tiles = calculateTilePositions(1072);
+  it('returns single tile for image within the tile height', () => {
+    const tiles = calculateTilePositions(1072, 1072);
     assert.equal(tiles.length, 1);
     assert.deepEqual(tiles[0], { y: 0, height: 1072 });
   });
 
-  it('returns single tile for image shorter than MAX_DIMENSION', () => {
-    const tiles = calculateTilePositions(500);
+  it('returns single tile for image shorter than the tile height', () => {
+    const tiles = calculateTilePositions(500, 1072);
     assert.equal(tiles.length, 1);
     assert.deepEqual(tiles[0], { y: 0, height: 500 });
   });
 
   it('returns two tiles with correct overlap for slightly tall image', () => {
-    const tiles = calculateTilePositions(1500);
+    const tiles = calculateTilePositions(1500, 1072);
     assert.equal(tiles.length, 2);
     assert.deepEqual(tiles[0], { y: 0, height: 1072 });
     assert.equal(tiles[1].y, 1072 - CONFIG.TILE_OVERLAP); // 1022
@@ -29,14 +29,14 @@ describe('calculateTilePositions', () => {
 
   it('handles exact two-tile boundary', () => {
     // 1072 + (1072 - 50) = 2094
-    const tiles = calculateTilePositions(2094);
+    const tiles = calculateTilePositions(2094, 1072);
     assert.equal(tiles.length, 2);
     assert.deepEqual(tiles[0], { y: 0, height: 1072 });
     assert.deepEqual(tiles[1], { y: 1022, height: 1072 });
   });
 
   it('tiles three-tile image correctly', () => {
-    const tiles = calculateTilePositions(2930);
+    const tiles = calculateTilePositions(2930, 1072);
     assert.equal(tiles.length, 3);
     assert.deepEqual(tiles[0], { y: 0, height: 1072 });
     assert.equal(tiles[1].y, 1022);
@@ -45,20 +45,20 @@ describe('calculateTilePositions', () => {
 
   it('caps at MAX_TILES', () => {
     // Very tall image
-    const tiles = calculateTilePositions(50000);
+    const tiles = calculateTilePositions(50000, 1072);
     assert.equal(tiles.length, CONFIG.MAX_TILES);
     assert.equal(tiles.length, 8);
   });
 
   it('first tile always starts at y=0', () => {
     for (const h of [500, 1072, 2000, 5000, 10000]) {
-      const tiles = calculateTilePositions(h);
+      const tiles = calculateTilePositions(h, 1072);
       assert.equal(tiles[0].y, 0);
     }
   });
 
   it('tiles have consistent overlap', () => {
-    const tiles = calculateTilePositions(5000);
+    const tiles = calculateTilePositions(5000, 1072);
     for (let i = 1; i < tiles.length; i++) {
       const prevEnd = tiles[i - 1].y + tiles[i - 1].height;
       const overlap = prevEnd - tiles[i].y;
@@ -71,7 +71,7 @@ describe('calculateTilePositions', () => {
 
   it('last tile does not exceed image height', () => {
     for (const h of [1500, 2930, 5000, 8000]) {
-      const tiles = calculateTilePositions(h);
+      const tiles = calculateTilePositions(h, 1072);
       const lastTile = tiles[tiles.length - 1];
       assert.ok(lastTile.y + lastTile.height <= h);
     }
@@ -79,7 +79,7 @@ describe('calculateTilePositions', () => {
 
   it('tiles cover the full image (no gaps)', () => {
     const h = 3000;
-    const tiles = calculateTilePositions(h);
+    const tiles = calculateTilePositions(h, 1072);
     // Check every pixel row is covered by at least one tile
     for (let row = 0; row < h; row++) {
       const covered = tiles.some(t => row >= t.y && row < t.y + t.height);
@@ -93,7 +93,7 @@ describe('calculateTilePositions', () => {
   });
 
   it('returns empty for zero height', () => {
-    const tiles = calculateTilePositions(0);
+    const tiles = calculateTilePositions(0, 1072);
     assert.equal(tiles.length, 0);
   });
 });

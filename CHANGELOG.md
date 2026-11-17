@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.0 — 2026-11-17
+
+### Changed
+
+- **Sized for current Claude models (high-resolution vision).** Claude 4.7 and later (Opus 4.7/4.8/5/5.5, Sonnet 5/5.5, Haiku 5.5, Fable / Mythos 5.x) read images at up to **2576 px on the long edge and 4784 visual tokens**; viewcap was hard-wired to 1072 px, tuned for the older 1568 px / 1568-token tier. The single `MAX_DIMENSION` (1072) is replaced by:
+  - **`MAX_VIEWPORT` 2576**: real desktop breakpoints (1280, 1440, 1920) can now be captured at their actual width.
+  - **Vision tiers**: `high` (default; 2576 px / 4784 tokens) and `standard` (1568 px / 1568 tokens), chosen with `--vision-tier` (MCP server arg or CLI flag) or `VIEWCAP_VISION_TIER`. Every returned image is sized to fit the tier's edge **and** token limits, so the API never downscales it again.
+  - **Token-aware tiling**: each full-page tile is as tall as the tier allows for the image's width (2576 px at 1280 wide on the high tier), so a typical page needs about half as many images.
+- **Default viewport 1280×800** (was 1072×1072): a common desktop size, and fewer tokens per viewport shot.
+- `take_screencast` captures the top 1280×800 viewport per frame (was 1072×1072); frames are fitted to the tier.
+- `get_status` reports the active vision tier.
+- Plain `viewcap` at an interactive terminal prints help (with the viewcap and Puppeteer versions and the vision tier) instead of starting the MCP server and waiting for input. MCP clients always pipe stdin, so they still get the server.
+- `viewcap --version` prints `viewcap vX (Puppeteer vY)`.
+- **`publish.sh` refuses a non-numeric OTP** (must be 6–8 digits) and checks it before anything else runs. Previously a misplaced flag such as `./publish.sh minor --dry-run` was passed to npm as the 2FA code during a real publish, with only a warning.
+
+### Added
+
+- `src/vision.js`: `visualTokens()`, `fitDimensions()`, `maxTileHeight()`, `fitBuffer()`, tested against the published token-cost table.
+- **og:image** (`docs/og-image.png`, 1200×630, with its HTML source) at the top of the README, with npm / license / "MCP server + CLI" badges underneath.
+- README: "Image sizing for Claude" (tiers, costs, the >20-images-per-request limit) and "MCP or CLI?" (why viewcap stays an MCP server for Claude, and when the CLI is the better fit).
+
 ## 0.2.0 — 2026-08-14
 
 ### Added

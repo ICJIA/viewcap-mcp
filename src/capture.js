@@ -4,7 +4,8 @@ import os from 'os';
 import fs from 'fs';
 import { lookup } from 'dns/promises';
 import { createHash } from 'crypto';
-import { CONFIG } from './config.js';
+import { CONFIG, getVisionLimits } from './config.js';
+import { maxTileHeight, fitBuffer } from './vision.js';
 import { getPage, closePage } from './browser.js';
 
 let allowJs = false;
@@ -112,17 +113,20 @@ function handleJsInjection(javascript) {
 
 // ─── Tiling ────────────────────────────────────────────────────────
 
-function calculateTilePositions(imageHeight) {
+// Split an image of `imageHeight` px into tiles of at most `tileHeight` px,
+// overlapping by TILE_OVERLAP so text on a seam appears whole in one tile.
+// The tile height comes from maxTileHeight() for the image's width, so each
+// tile fits the active vision tier.
+function calculateTilePositions(imageHeight, tileHeight) {
   const positions = [];
   let y = 0;
 
   while (y < imageHeight && positions.length < CONFIG.MAX_TILES) {
     const remaining = imageHeight - y;
-    const tileHeight = Math.min(CONFIG.MAX_DIMENSION, remaining);
-    positions.push({ y, height: tileHeight });
+    positions.push({ y, height: Math.min(tileHeight, remaining) });
 
-    if (y + CONFIG.MAX_DIMENSION >= imageHeight) break;
-    y += CONFIG.MAX_DIMENSION - CONFIG.TILE_OVERLAP;
+    if (y + tileHeight >= imageHeight) break;
+    y += tileHeight - CONFIG.TILE_OVERLAP;
   }
 
   return positions;
@@ -138,8 +142,8 @@ async function _takeScreenshot({ url, width, height, fullPage, waitUntil, waitFo
     outputDir = validateOutputDir(directory);
   }
 
-  width = Math.min(width, CONFIG.MAX_DIMENSION);
-  height = Math.min(height, CONFIG.MAX_DIMENSION);
+  width = Math.min(width, CONFIG.MAX_VIEWPORT);
+  height = Math.min(height, CONFIG.MAX_VIEWPORT);
 
   let buffer;
   let page;
@@ -165,14 +169,17 @@ async function _takeScreenshot({ url, width, height, fullPage, waitUntil, waitFo
   }
 
   // Image processing — page is closed, work with buffer only
+  const limits = getVisionLimits();
   const meta = await sharp(buffer).metadata();
   let workBuffer = buffer;
   let workWidth = meta.width;
   let workHeight = meta.height;
 
-  if (workWidth > CONFIG.MAX_DIMENSION) {
+  // Wider than the tier's max edge: scale the whole capture down to that
+  // width first (tiles are then cut from the scaled image).
+  if (workWidth > limits.maxEdge) {
     workBuffer = await sharp(buffer)
-      .resize({ width: CONFIG.MAX_DIMENSION, withoutEnlargement: true })
+      .resize({ width: limits.maxEdge, withoutEnlargement: true })
       .png()
       .toBuffer();
     const resizedMeta = await sharp(workBuffer).metadata();
@@ -180,11 +187,14 @@ async function _takeScreenshot({ url, width, height, fullPage, waitUntil, waitFo
     workHeight = resizedMeta.height;
   }
 
+  // Tallest tile this width allows within the tier's edge and token limits.
+  const tileHeight = maxTileHeight(workWidth, limits);
+
   // One timestamp per capture so all tiles share a filename prefix
   const timestamp = Date.now();
 
   // Single image — no tiling needed
-  if (workHeight <= CONFIG.MAX_DIMENSION) {
+  if (workHeight <= tileHeight) {
     if (outputDir) {
       const filePath = path.join(outputDir, `screenshot-${timestamp}-tile-1.png`);
       fs.writeFileSync(filePath, workBuffer);
@@ -194,7 +204,7 @@ async function _takeScreenshot({ url, width, height, fullPage, waitUntil, waitFo
   }
 
   // Tiling
-  const tiles = calculateTilePositions(workHeight);
+  const tiles = calculateTilePositions(workHeight, tileHeight);
   const content = [];
 
   for (let i = 0; i < tiles.length; i++) {
@@ -230,8 +240,8 @@ async function _captureSelector({ url, selector, width, height, waitUntil, waitF
     outputDir = validateOutputDir(directory);
   }
 
-  width = Math.min(width, CONFIG.MAX_DIMENSION);
-  height = Math.min(height, CONFIG.MAX_DIMENSION);
+  width = Math.min(width, CONFIG.MAX_VIEWPORT);
+  height = Math.min(height, CONFIG.MAX_VIEWPORT);
 
   let buffer;
   let page;
@@ -259,18 +269,9 @@ async function _captureSelector({ url, selector, width, height, waitUntil, waitF
     if (page) await closePage(page);
   }
 
-  // Resize if needed — proportional so largest edge = MAX_DIMENSION
-  const meta = await sharp(buffer).metadata();
-  let workBuffer = buffer;
-
-  if (meta.width > CONFIG.MAX_DIMENSION || meta.height > CONFIG.MAX_DIMENSION) {
-    const scale = Math.min(CONFIG.MAX_DIMENSION / meta.width, CONFIG.MAX_DIMENSION / meta.height);
-    const newWidth = Math.round(meta.width * scale);
-    workBuffer = await sharp(buffer)
-      .resize({ width: newWidth, withoutEnlargement: true })
-      .png()
-      .toBuffer();
-  }
+  // Resize if needed — proportional, to fit the vision tier's edge and
+  // token limits
+  const { buffer: workBuffer } = await fitBuffer(buffer);
 
   if (outputDir) {
     const filePath = path.join(outputDir, `selector-${Date.now()}.png`);
